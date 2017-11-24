@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 import (
 	"encoding/json"
@@ -74,7 +74,7 @@ func (c *StringOrLinterConfig) UnmarshalJSON(raw []byte) error {
 	if err := json.Unmarshal(raw, &linterSpec); err != nil {
 		return origErr
 	}
-	linter, err := parseLinterConfigSpec("", linterSpec)
+	linter, err := ParseLinterConfigSpec("", linterSpec)
 	if err != nil {
 		return err
 	}
@@ -99,10 +99,8 @@ func (td *jsonDuration) Duration() time.Duration {
 	return time.Duration(*td)
 }
 
-var sortKeys = []string{"none", "path", "line", "column", "severity", "message", "linter"}
-
 // Configuration defaults.
-var config = &Config{
+var Configuration = &Config{
 	Format: DefaultIssueFormat,
 
 	Linters: map[string]StringOrLinterConfig{},

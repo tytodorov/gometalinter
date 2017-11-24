@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 type stringSet struct {
 	items map[string]struct{}

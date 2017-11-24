@@ -84,7 +84,7 @@ func RunLinter(t *testing.T, linter string, path string, extraFlags ...string) I
 func buildBinary(t *testing.T) (string, func()) {
 	tmpdir := fs.NewDir(t, "regression-test-binary")
 	path := tmpdir.Join("gometalinter")
-	cmd := exec.Command("go", "build", "-o", path, "..")
+	cmd := exec.Command("go", "build", "-o", path, "../cmd/gometalinter")
 	require.NoError(t, cmd.Run())
 	return path, tmpdir.Remove
 }

@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 import (
 	"io/ioutil"
@@ -9,6 +9,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func mkDir(t *testing.T, paths ...string) {
+	fullPath := filepath.Join(paths...)
+	require.NoError(t, os.MkdirAll(fullPath, 0755))
+	mkGoFile(t, fullPath, "file.go")
+}
+
+func mkGoFile(t *testing.T, path string, filename string) {
+	content := []byte("package foo")
+	err := ioutil.WriteFile(filepath.Join(path, filename), content, 0644)
+	require.NoError(t, err)
+}
 
 func TestPartitionToMaxSize(t *testing.T) {
 	cmdArgs := []string{"/usr/bin/foo", "-c"}

@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 import (
 	"bytes"
@@ -71,7 +71,7 @@ func runLinters(linters map[string]*Linter, paths []string, concurrency int, exc
 	incomingIssues := make(chan *Issue, 1000000)
 
 	directiveParser := newDirectiveParser()
-	if config.WarnUnmatchedDirective {
+	if Configuration.WarnUnmatchedDirective {
 		directiveParser.LoadFiles(paths)
 	}
 
@@ -79,16 +79,16 @@ func runLinters(linters map[string]*Linter, paths []string, concurrency int, exc
 		directiveParser, maybeAggregateIssues(incomingIssues)))
 
 	vars := Vars{
-		"duplthreshold":    fmt.Sprintf("%d", config.DuplThreshold),
-		"mincyclo":         fmt.Sprintf("%d", config.Cyclo),
-		"maxlinelength":    fmt.Sprintf("%d", config.LineLength),
-		"min_confidence":   fmt.Sprintf("%f", config.MinConfidence),
-		"min_occurrences":  fmt.Sprintf("%d", config.MinOccurrences),
-		"min_const_length": fmt.Sprintf("%d", config.MinConstLength),
+		"duplthreshold":    fmt.Sprintf("%d", Configuration.DuplThreshold),
+		"mincyclo":         fmt.Sprintf("%d", Configuration.Cyclo),
+		"maxlinelength":    fmt.Sprintf("%d", Configuration.LineLength),
+		"min_confidence":   fmt.Sprintf("%f", Configuration.MinConfidence),
+		"min_occurrences":  fmt.Sprintf("%d", Configuration.MinOccurrences),
+		"min_const_length": fmt.Sprintf("%d", Configuration.MinConstLength),
 		"tests":            "",
 		"not_tests":        "true",
 	}
-	if config.Test {
+	if Configuration.Test {
 		vars["tests"] = "true"
 		vars["not_tests"] = ""
 	}
@@ -96,7 +96,7 @@ func runLinters(linters map[string]*Linter, paths []string, concurrency int, exc
 	wg := &sync.WaitGroup{}
 	id := 1
 	for _, linter := range linters {
-		deadline := time.After(config.Deadline.Duration())
+		deadline := time.After(Configuration.Deadline.Duration())
 		state := &linterState{
 			Linter:   linter,
 			issues:   incomingIssues,
@@ -224,7 +224,7 @@ func processOutput(dbg debugFunction, state *linterState, out []byte) {
 			group = append(group, fragment)
 		}
 
-		issue, err := NewIssue(state.Linter.Name, config.formatTemplate)
+		issue, err := NewIssue(state.Linter.Name, Configuration.formatTemplate)
 		kingpin.FatalIfError(err, "Invalid output format")
 
 		for i, name := range re.SubexpNames() {
@@ -257,10 +257,10 @@ func processOutput(dbg debugFunction, state *linterState, out []byte) {
 		}
 		// TODO: set messageOveride and severity on the Linter instead of reading
 		// them directly from the static config
-		if m, ok := config.MessageOverride[state.Name]; ok {
+		if m, ok := Configuration.MessageOverride[state.Name]; ok {
 			issue.Message = vars.Replace(m)
 		}
-		if sev, ok := config.Severity[state.Name]; ok {
+		if sev, ok := Configuration.Severity[state.Name]; ok {
 			issue.Severity = Severity(sev)
 		}
 		if state.exclude != nil && state.exclude.MatchString(issue.String()) {
@@ -305,14 +305,14 @@ func resolvePath(path string) string {
 }
 
 func maybeSortIssues(issues chan *Issue) chan *Issue {
-	if reflect.DeepEqual([]string{"none"}, config.Sort) {
+	if reflect.DeepEqual([]string{"none"}, Configuration.Sort) {
 		return issues
 	}
-	return SortIssueChan(issues, config.Sort)
+	return SortIssueChan(issues, Configuration.Sort)
 }
 
 func maybeAggregateIssues(issues chan *Issue) chan *Issue {
-	if !config.Aggregate {
+	if !Configuration.Aggregate {
 		return issues
 	}
 	return AggregateIssueChan(issues)

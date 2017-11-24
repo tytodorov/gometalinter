@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 import (
 	"reflect"
@@ -39,20 +39,20 @@ func TestGetLinterByName(t *testing.T) {
 }
 
 func TestValidateLinters(t *testing.T) {
-	originalConfig := *config
-	defer func() { config = &originalConfig }()
+	originalConfig := *Configuration
+	defer func() { Configuration = &originalConfig }()
 
-	config = &Config{
+	Configuration = &Config{
 		Enable: []string{"_dummylinter_"},
 	}
 
-	err := validateLinters(lintersFromConfig(config), config)
+	err := validateLinters(lintersFromConfig(Configuration), Configuration)
 	require.Error(t, err, "expected unknown linter error for _dummylinter_")
 
-	config = &Config{
+	Configuration = &Config{
 		Enable: defaultEnabled(),
 	}
-	err = validateLinters(lintersFromConfig(config), config)
+	err = validateLinters(lintersFromConfig(Configuration), Configuration)
 	require.NoError(t, err)
 }
 

@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 import (
 	"encoding/xml"
@@ -43,7 +43,7 @@ func outputToCheckstyle(issues chan *Issue) int {
 			}
 		}
 
-		if config.Errors && issue.Severity != Error {
+		if Configuration.Errors && issue.Severity != Error {
 			continue
 		}
 

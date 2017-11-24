@@ -1,7 +1,6 @@
-package main
+package gometalinter
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,116 +24,10 @@ var (
 	}
 )
 
-func setupFlags(app *kingpin.Application) {
-	app.Flag("config", "Load JSON configuration from file.").Action(loadConfig).String()
-	app.Flag("disable", "Disable previously enabled linters.").PlaceHolder("LINTER").Short('D').Action(disableAction).Strings()
-	app.Flag("enable", "Enable previously disabled linters.").PlaceHolder("LINTER").Short('E').Action(enableAction).Strings()
-	app.Flag("linter", "Define a linter.").PlaceHolder("NAME:COMMAND:PATTERN").Action(cliLinterOverrides).StringMap()
-	app.Flag("message-overrides", "Override message from linter. {message} will be expanded to the original message.").PlaceHolder("LINTER:MESSAGE").StringMapVar(&config.MessageOverride)
-	app.Flag("severity", "Map of linter severities.").PlaceHolder("LINTER:SEVERITY").StringMapVar(&config.Severity)
-	app.Flag("disable-all", "Disable all linters.").Action(disableAllAction).Bool()
-	app.Flag("enable-all", "Enable all linters.").Action(enableAllAction).Bool()
-	app.Flag("format", "Output format.").PlaceHolder(config.Format).StringVar(&config.Format)
-	app.Flag("vendored-linters", "Use vendored linters (recommended).").BoolVar(&config.VendoredLinters)
-	app.Flag("fast", "Only run fast linters.").BoolVar(&config.Fast)
-	app.Flag("install", "Attempt to install all known linters.").Short('i').BoolVar(&config.Install)
-	app.Flag("update", "Pass -u to go tool when installing.").Short('u').BoolVar(&config.Update)
-	app.Flag("force", "Pass -f to go tool when installing.").Short('f').BoolVar(&config.Force)
-	app.Flag("download-only", "Pass -d to go tool when installing.").BoolVar(&config.DownloadOnly)
-	app.Flag("debug", "Display messages for failed linters, etc.").Short('d').BoolVar(&config.Debug)
-	app.Flag("concurrency", "Number of concurrent linters to run.").PlaceHolder(fmt.Sprintf("%d", runtime.NumCPU())).Short('j').IntVar(&config.Concurrency)
-	app.Flag("exclude", "Exclude messages matching these regular expressions.").Short('e').PlaceHolder("REGEXP").StringsVar(&config.Exclude)
-	app.Flag("include", "Include messages matching these regular expressions.").Short('I').PlaceHolder("REGEXP").StringsVar(&config.Include)
-	app.Flag("skip", "Skip directories with this name when expanding '...'.").Short('s').PlaceHolder("DIR...").StringsVar(&config.Skip)
-	app.Flag("vendor", "Enable vendoring support (skips 'vendor' directories and sets GO15VENDOREXPERIMENT=1).").BoolVar(&config.Vendor)
-	app.Flag("cyclo-over", "Report functions with cyclomatic complexity over N (using gocyclo).").PlaceHolder("10").IntVar(&config.Cyclo)
-	app.Flag("line-length", "Report lines longer than N (using lll).").PlaceHolder("80").IntVar(&config.LineLength)
-	app.Flag("min-confidence", "Minimum confidence interval to pass to golint.").PlaceHolder(".80").FloatVar(&config.MinConfidence)
-	app.Flag("min-occurrences", "Minimum occurrences to pass to goconst.").PlaceHolder("3").IntVar(&config.MinOccurrences)
-	app.Flag("min-const-length", "Minimum constant length.").PlaceHolder("3").IntVar(&config.MinConstLength)
-	app.Flag("dupl-threshold", "Minimum token sequence as a clone for dupl.").PlaceHolder("50").IntVar(&config.DuplThreshold)
-	app.Flag("sort", fmt.Sprintf("Sort output by any of %s.", strings.Join(sortKeys, ", "))).PlaceHolder("none").EnumsVar(&config.Sort, sortKeys...)
-	app.Flag("tests", "Include test files for linters that support this option.").Short('t').BoolVar(&config.Test)
-	app.Flag("deadline", "Cancel linters if they have not completed within this duration.").PlaceHolder("30s").DurationVar((*time.Duration)(&config.Deadline))
-	app.Flag("errors", "Only show errors.").BoolVar(&config.Errors)
-	app.Flag("json", "Generate structured JSON rather than standard line-based output.").BoolVar(&config.JSON)
-	app.Flag("checkstyle", "Generate checkstyle XML rather than standard line-based output.").BoolVar(&config.Checkstyle)
-	app.Flag("enable-gc", "Enable GC for linters (useful on large repositories).").BoolVar(&config.EnableGC)
-	app.Flag("aggregate", "Aggregate issues reported by several linters.").BoolVar(&config.Aggregate)
-	app.Flag("warn-unmatched-nolint", "Warn if a nolint directive is not matched with an issue.").BoolVar(&config.WarnUnmatchedDirective)
-	app.GetFlag("help").Short('h')
-}
-
-func cliLinterOverrides(app *kingpin.Application, element *kingpin.ParseElement, ctx *kingpin.ParseContext) error {
-	// expected input structure - <name>:<command-spec>
-	parts := strings.SplitN(*element.Value, ":", 2)
-	if len(parts) < 2 {
-		return fmt.Errorf("incorrectly formatted input: %s", *element.Value)
-	}
-	name := parts[0]
-	spec := parts[1]
-	conf, err := parseLinterConfigSpec(name, spec)
-	if err != nil {
-		return fmt.Errorf("incorrectly formatted input: %s", *element.Value)
-	}
-	config.Linters[name] = StringOrLinterConfig(conf)
-	return nil
-}
-
-func loadConfig(app *kingpin.Application, element *kingpin.ParseElement, ctx *kingpin.ParseContext) error {
-	r, err := os.Open(*element.Value)
-	if err != nil {
-		return err
-	}
-	defer r.Close() // nolint: errcheck
-	err = json.NewDecoder(r).Decode(config)
-	if err != nil {
-		return err
-	}
-	for _, disable := range config.Disable {
-		for i, enable := range config.Enable {
-			if enable == disable {
-				config.Enable = append(config.Enable[:i], config.Enable[i+1:]...)
-				break
-			}
-		}
-	}
-	return err
-}
-
-func disableAction(app *kingpin.Application, element *kingpin.ParseElement, ctx *kingpin.ParseContext) error {
-	out := []string{}
-	for _, linter := range config.Enable {
-		if linter != *element.Value {
-			out = append(out, linter)
-		}
-	}
-	config.Enable = out
-	return nil
-}
-
-func enableAction(app *kingpin.Application, element *kingpin.ParseElement, ctx *kingpin.ParseContext) error {
-	config.Enable = append(config.Enable, *element.Value)
-	return nil
-}
-
-func disableAllAction(app *kingpin.Application, element *kingpin.ParseElement, ctx *kingpin.ParseContext) error {
-	config.Enable = []string{}
-	return nil
-}
-
-func enableAllAction(app *kingpin.Application, element *kingpin.ParseElement, ctx *kingpin.ParseContext) error {
-	for linter := range defaultLinters {
-		config.Enable = append(config.Enable, linter)
-	}
-	config.EnableAll = true
-	return nil
-}
-
 type debugFunction func(format string, args ...interface{})
 
 func debug(format string, args ...interface{}) {
-	if config.Debug {
+	if Configuration.Debug {
 		fmt.Fprintf(os.Stderr, "DEBUG: "+format+"\n", args...)
 	}
 }
@@ -149,45 +42,9 @@ func warning(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "WARNING: "+format+"\n", args...)
 }
 
-func formatLinters() string {
-	w := bytes.NewBuffer(nil)
-	for _, linter := range getDefaultLinters() {
-		install := "(" + linter.InstallFrom + ")"
-		if install == "()" {
-			install = ""
-		}
-		fmt.Fprintf(w, "  %s: %s\n\tcommand: %s\n\tregex: %s\n\tfast: %t\n\tdefault enabled: %t\n\n",
-			linter.Name, install, linter.Command, linter.Pattern, linter.IsFast, linter.defaultEnabled)
-	}
-	return w.String()
-}
-
-func formatSeverity() string {
-	w := bytes.NewBuffer(nil)
-	for name, severity := range config.Severity {
-		fmt.Fprintf(w, "  %s -> %s\n", name, severity)
-	}
-	return w.String()
-}
-
-func main() {
-	pathsArg := kingpin.Arg("path", "Directories to lint. Defaults to \".\". <path>/... will recurse.").Strings()
-	app := kingpin.CommandLine
-	setupFlags(app)
-	app.Help = fmt.Sprintf(`Aggregate and normalise the output of a whole bunch of Go linters.
-
-PlaceHolder linters:
-
-%s
-
-Severity override map (default is "warning"):
-
-%s
-`, formatLinters(), formatSeverity())
-	kingpin.Parse()
-
-	if config.Install {
-		if config.VendoredLinters {
+func Run(paths []string) {
+	if Configuration.Install {
+		if Configuration.VendoredLinters {
 			configureEnvironmentForInstall()
 		}
 		installLinters()
@@ -195,20 +52,20 @@ Severity override map (default is "warning"):
 	}
 
 	configureEnvironment()
-	include, exclude := processConfig(config)
+	include, exclude := processConfig(Configuration)
 
 	start := time.Now()
-	paths := resolvePaths(*pathsArg, config.Skip)
+	resolvedPaths := resolvePaths(paths, Configuration.Skip)
 
-	linters := lintersFromConfig(config)
-	err := validateLinters(linters, config)
+	linters := lintersFromConfig(Configuration)
+	err := validateLinters(linters, Configuration)
 	kingpin.FatalIfError(err, "")
 
-	issues, errch := runLinters(linters, paths, config.Concurrency, exclude, include)
+	issues, errch := runLinters(linters, resolvedPaths, Configuration.Concurrency, exclude, include)
 	status := 0
-	if config.JSON {
+	if Configuration.JSON {
 		status |= outputToJSON(issues)
-	} else if config.Checkstyle {
+	} else if Configuration.Checkstyle {
 		status |= outputToCheckstyle(issues)
 	} else {
 		status |= outputToConsole(issues)
@@ -273,7 +130,7 @@ https://github.com/alecthomas/gometalinter/issues/new
 func outputToConsole(issues chan *Issue) int {
 	status := 0
 	for issue := range issues {
-		if config.Errors && issue.Severity != Error {
+		if Configuration.Errors && issue.Severity != Error {
 			continue
 		}
 		fmt.Println(issue.String())
@@ -286,7 +143,7 @@ func outputToJSON(issues chan *Issue) int {
 	fmt.Println("[")
 	status := 0
 	for issue := range issues {
-		if config.Errors && issue.Severity != Error {
+		if Configuration.Errors && issue.Severity != Error {
 			continue
 		}
 		if status != 0 {

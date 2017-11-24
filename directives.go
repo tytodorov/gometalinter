@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 import (
 	"fmt"
@@ -192,7 +192,7 @@ func filterIssuesViaDirectives(directives *directiveParser, issues chan *Issue) 
 			}
 		}
 
-		if config.WarnUnmatchedDirective {
+		if Configuration.WarnUnmatchedDirective {
 			for _, issue := range warnOnUnusedDirective(directives) {
 				out <- issue
 			}
@@ -206,7 +206,7 @@ func warnOnUnusedDirective(directives *directiveParser) []*Issue {
 	out := []*Issue{}
 	for path, ranges := range directives.Unmatched() {
 		for _, ignore := range ranges {
-			issue, _ := NewIssue("nolint", config.formatTemplate)
+			issue, _ := NewIssue("nolint", Configuration.formatTemplate)
 			issue.Path = path
 			issue.Line = ignore.start
 			issue.Col = ignore.col

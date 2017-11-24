@@ -1,4 +1,4 @@
-package main
+package gometalinter
 
 import (
 	"fmt"
@@ -18,6 +18,10 @@ type LinterConfig struct {
 	PartitionStrategy partitionStrategy
 	IsFast            bool
 	defaultEnabled    bool
+}
+
+func (l *LinterConfig) IsDefaultEnabled() bool {
+	return l.defaultEnabled
 }
 
 type Linter struct {
@@ -55,7 +59,7 @@ var predefinedPatterns = map[string]string{
 }
 
 func getLinterByName(name string, overrideConf LinterConfig) *Linter {
-	conf := defaultLinters[name]
+	conf := DefaultLinters[name]
 	if val := overrideConf.Command; val != "" {
 		conf.Command = val
 	}
@@ -76,13 +80,13 @@ func getLinterByName(name string, overrideConf LinterConfig) *Linter {
 	return linter
 }
 
-func parseLinterConfigSpec(name string, spec string) (LinterConfig, error) {
+func ParseLinterConfigSpec(name string, spec string) (LinterConfig, error) {
 	parts := strings.SplitN(spec, ":", 2)
 	if len(parts) < 2 {
 		return LinterConfig{}, fmt.Errorf("linter spec needs at least two components")
 	}
 
-	config := defaultLinters[name]
+	config := DefaultLinters[name]
 	config.Command, config.Pattern = parts[0], parts[1]
 	if predefined, ok := predefinedPatterns[config.Pattern]; ok {
 		config.Pattern = predefined
@@ -93,20 +97,20 @@ func parseLinterConfigSpec(name string, spec string) (LinterConfig, error) {
 
 func makeInstallCommand(linters ...string) []string {
 	cmd := []string{"get"}
-	if config.VendoredLinters {
+	if Configuration.VendoredLinters {
 		cmd = []string{"install"}
 	} else {
-		if config.Update {
+		if Configuration.Update {
 			cmd = append(cmd, "-u")
 		}
-		if config.Force {
+		if Configuration.Force {
 			cmd = append(cmd, "-f")
 		}
-		if config.DownloadOnly {
+		if Configuration.DownloadOnly {
 			cmd = append(cmd, "-d")
 		}
 	}
-	if config.Debug {
+	if Configuration.Debug {
 		cmd = append(cmd, "-v")
 	}
 	cmd = append(cmd, linters...)
@@ -141,9 +145,9 @@ func installLintersIndividually(targets []string) {
 }
 
 func installLinters() {
-	names := make([]string, 0, len(defaultLinters))
-	targets := make([]string, 0, len(defaultLinters))
-	for name, config := range defaultLinters {
+	names := make([]string, 0, len(DefaultLinters))
+	targets := make([]string, 0, len(DefaultLinters))
+	for name, config := range DefaultLinters {
 		if config.InstallFrom == "" {
 			continue
 		}
@@ -152,7 +156,7 @@ func installLinters() {
 	}
 	sort.Strings(names)
 	namesStr := strings.Join(names, "\n  ")
-	if config.DownloadOnly {
+	if Configuration.DownloadOnly {
 		fmt.Printf("Downloading:\n  %s\n", namesStr)
 	} else {
 		fmt.Printf("Installing:\n  %s\n", namesStr)
@@ -165,9 +169,9 @@ func installLinters() {
 	installLintersIndividually(targets)
 }
 
-func getDefaultLinters() []*Linter {
+func GetDefaultLinters() []*Linter {
 	out := []*Linter{}
-	for name, config := range defaultLinters {
+	for name, config := range DefaultLinters {
 		linter, err := NewLinter(name, config)
 		kingpin.FatalIfError(err, "invalid linter %q", name)
 		out = append(out, linter)
@@ -177,7 +181,7 @@ func getDefaultLinters() []*Linter {
 
 func defaultEnabled() []string {
 	enabled := []string{}
-	for name, config := range defaultLinters {
+	for name, config := range DefaultLinters {
 		if config.defaultEnabled {
 			enabled = append(enabled, name)
 		}
@@ -188,7 +192,7 @@ func defaultEnabled() []string {
 func validateLinters(linters map[string]*Linter, config *Config) error {
 	var unknownLinters []string
 	for name := range linters {
-		if _, isDefault := defaultLinters[name]; !isDefault {
+		if _, isDefault := DefaultLinters[name]; !isDefault {
 			if _, isCustom := config.Linters[name]; !isCustom {
 				unknownLinters = append(unknownLinters, name)
 			}
@@ -202,7 +206,7 @@ func validateLinters(linters map[string]*Linter, config *Config) error {
 
 const vetPattern = `^(?:vet:.*?\.go:\s+(?P<path>.*?\.go):(?P<line>\d+):(?P<col>\d+):\s*(?P<message>.*))|(?:(?P<path>.*?\.go):(?P<line>\d+):\s*(?P<message>.*))$`
 
-var defaultLinters = map[string]LinterConfig{
+var DefaultLinters = map[string]LinterConfig{
 	"maligned": {
 		Command:           "maligned",
 		Pattern:           `^(?:[^:]+: )?(?P<path>.*?\.go):(?P<line>\d+):(?P<col>\d+):\s*(?P<message>.+)$`,
