@@ -20,7 +20,7 @@ import (
 var (
 	// Locations to look for vendored linters.
 	vendoredSearchPaths = [][]string{
-		{"github.com", "alecthomas", "gometalinter", "_linters"},
+		{"github.com", "tytodorov", "gometalinter", "_linters"},
 		{"gopkg.in", "alecthomas", "gometalinter.v1", "_linters"},
 	}
 )

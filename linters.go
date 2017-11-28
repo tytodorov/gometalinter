@@ -232,7 +232,7 @@ var defaultLinters = map[string]LinterConfig{
 		defaultEnabled:    true,
 	},
 	"gas": {
-		Command:           `gas -fmt=csv`,
+		Command:           `gas -fmt=csv -exclude=G102`, // remove after fix - https://github.com/GoASTScanner/gas/issues/145
 		Pattern:           `^(?P<path>.*?\.go),(?P<line>\d+),(?P<message>[^,]+,[^,]+,[^,]+)`,
 		InstallFrom:       "github.com/GoASTScanner/gas",
 		PartitionStrategy: partitionPathsAsFiles,
